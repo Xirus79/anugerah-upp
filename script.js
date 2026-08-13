@@ -12,233 +12,275 @@ if (serviceTabs.length > 0) {
   });
 }
 
-// ===== 2. PORTFOLIO CAROUSEL, FILTER, DROPDOWN & MODAL (PERFECT LOOP) =====
+// ===== 2. PORTFOLIO CAROUSEL DENGAN GOOGLE SHEETS =====
 (function(){
+  // MASUKKAN LINK TSV (BUKAN CSV) GOOGLE SHEETS DI SINI
+  const tsvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ0hszsBjPA_dKuF1LSAgQY0_A0pTs69I3j7bwRjlttNO1eQOtQ0_OvAe9AroJLwgf3tCwqOadqOUjA/pub?output=tsv';
+  
   const source = document.getElementById('projectSource');
-  const track = document.getElementById('projectTrack');
-  const dotsWrap = document.getElementById('projectDots');
-  const prevBtn = document.getElementById('projectPrev');
-  const nextBtn = document.getElementById('projectNext');
-  const carouselWrap = document.querySelector('.project-carousel');
-  const filterTabs = document.querySelectorAll('.filter-row .tab');
+  if (!source) return;
 
-  if (!source || !track || !dotsWrap) return;
-
-  const allCards = Array.from(source.querySelectorAll('.project-card'));
-  let currentFilter = 'all';
-  let page = 0;
-  let totalPages = 0;
-  let isTransitioning = false;
-  let autoplayTimer = null;
-
-  function groupSize(){
-    const w = window.innerWidth;
-    if (w <= 576) return 2;
-    if (w <= 960) return 3;
-    return 5;
+  // Fungsi otomatis mengubah link Google Drive menjadi Thumbnail API
+  function ubahLinkDrive(url) {
+      if (url.includes('drive.google.com')) {
+          const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+          if (match && match[1]) {
+              return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w800`;
+          }
+      }
+      return url;
   }
 
-  function getFiltered(){
-    return currentFilter === 'all'
-      ? allCards
-      : allCards.filter(card => card.dataset.category === currentFilter);
-  }
+  // Menarik data dari Google Sheets
+  fetch(tsvUrl)
+    .then(response => response.text())
+    .then(data => {
+        // Kosongkan data manual bawaan dari HTML
+        source.innerHTML = ''; 
 
-  function buildPages(){
-    stopAutoplay();
-    const size = groupSize();
-    const cards = getFiltered();
-    track.innerHTML = '';
-    dotsWrap.innerHTML = '';
+        const baris = data.split('\n');
 
-    if (cards.length === 0){
-      totalPages = 0;
-      render(false);
-      return;
-    }
-    /* === TAMBAHKAN KODE INI KHUSUS UNTUK HP === */
-    if (window.innerWidth <= 768) {
-      // Jejerkan kartu secara langsung tanpa dibungkus halaman
-      cards.forEach(card => track.appendChild(card.cloneNode(true)));
-      return; // Hentikan fungsi JS di sini agar CSS Native mengambil alih
-    }
-    const groups = [];
-    for (let i = 0; i < cards.length; i += size){
-      groups.push(cards.slice(i, i + size));
-    }
-    totalPages = groups.length;
+        for (let i = 1; i < baris.length; i++) {
+            // Gunakan split('\t') karena kita menggunakan format TSV (Tab) agar aman dari tanda koma
+            const kolom = baris[i].split('\t');
 
-    // 1. Masukkan halaman asli ke dalam track
-    groups.forEach(group => {
-      const pageEl = document.createElement('div');
-      pageEl.className = 'project-page';
-      pageEl.style.setProperty('--project-cols', size);
-      group.forEach(card => pageEl.appendChild(card.cloneNode(true)));
-      track.appendChild(pageEl);
+            // Pastikan minimal ada 5 kolom terisi
+            if (kolom.length >= 5) {
+                const kategori = kolom[0].trim().toLowerCase();
+                const nama = kolom[1].trim();
+                const descSingkat = kolom[2].trim();
+                const descPanjang = kolom[3].trim();
+                let gambar = kolom[4].trim();
+
+                gambar = ubahLinkDrive(gambar);
+
+                // Template HTML otomatis untuk setiap produk
+                const htmlCard = `
+                  <article class="project-card" data-category="${kategori}">
+                    <div class="card-image-wrapper">
+                      <img src="${gambar}" alt="${nama}">
+                      <div class="image-overlay">
+                        <p>${descSingkat}</p>
+                      </div>
+                    </div>
+                    <div class="card-footer">
+                      <div class="card-title-row">
+                        <h4>${nama}</h4>
+                        <button class="dropdown-toggle-btn" aria-label="Toggle Details">
+                          <span class="arrow-icon">▼</span>
+                        </button>
+                      </div>
+                      <div class="card-dropdown-content">
+                        <p>${descPanjang}</p>
+                      </div>
+                    </div>
+                  </article>
+                `;
+                // Suntikkan ke HTML
+                source.innerHTML += htmlCard;
+            }
+        }
+        
+        // SETELAH KARTU SELESAI DIBUAT DARI GOOGLE SHEETS, JALANKAN LOGIKA CAROUSEL ASLI
+        initCarousel();
+    })
+    .catch(error => {
+        console.error('Gagal memuat data dari Google Sheets:', error);
+        initCarousel(); // Tetap jalankan carousel jika gagal agar web tidak patah
     });
 
-    // 2. Kloning halaman untuk efek Perfect Loop (Hanya jika halaman lebih dari 1)
-    if (totalPages > 1) {
-      const originalPages = Array.from(track.querySelectorAll('.project-page'));
-      originalPages.forEach(p => track.appendChild(p.cloneNode(true)));
-    }
+  // --- LOGIKA ASLI CAROUSEL KAMU ---
+  function initCarousel() {
+      const track = document.getElementById('projectTrack');
+      const dotsWrap = document.getElementById('projectDots');
+      const prevBtn = document.getElementById('projectPrev');
+      const nextBtn = document.getElementById('projectNext');
+      const carouselWrap = document.querySelector('.project-carousel');
+      const filterTabs = document.querySelectorAll('.filter-row .tab');
 
-    // 3. Atur lebar keseluruhan track dan lebar masing-masing page
-    const totalSlides = totalPages > 1 ? totalPages * 2 : totalPages;
-    track.style.width = (totalSlides * 100) + '%';
-    track.querySelectorAll('.project-page').forEach(p => {
-      p.style.flex = `0 0 ${100 / totalSlides}%`;
-      p.style.width = `${100 / totalSlides}%`;
-    });
+      if (!track || !dotsWrap) return;
 
-    // 4. Bangun titik indikator (dots)
-    for (let i = 0; i < totalPages; i++){
-      const dot = document.createElement('span');
-      if (i === 0) dot.classList.add('active');
-      dot.addEventListener('click', () => {
-        if (isTransitioning || page === i) return;
-        page = i;
+      const allCards = Array.from(source.querySelectorAll('.project-card'));
+      let currentFilter = 'all';
+      let page = 0;
+      let totalPages = 0;
+      let isTransitioning = false;
+      let autoplayTimer = null;
+
+      function groupSize(){
+        const w = window.innerWidth;
+        if (w <= 576) return 2;
+        if (w <= 960) return 3;
+        return 5;
+      }
+
+      function getFiltered(){
+        return currentFilter === 'all'
+          ? allCards
+          : allCards.filter(card => card.dataset.category === currentFilter);
+      }
+
+      function buildPages(){
+        stopAutoplay();
+        const size = groupSize();
+        const cards = getFiltered();
+        track.innerHTML = '';
+        dotsWrap.innerHTML = '';
+
+        if (cards.length === 0){
+          totalPages = 0;
+          render(false);
+          return;
+        }
+        if (window.innerWidth <= 768) {
+          cards.forEach(card => track.appendChild(card.cloneNode(true)));
+          return; 
+        }
+        const groups = [];
+        for (let i = 0; i < cards.length; i += size){
+          groups.push(cards.slice(i, i + size));
+        }
+        totalPages = groups.length;
+
+        groups.forEach(group => {
+          const pageEl = document.createElement('div');
+          pageEl.className = 'project-page';
+          pageEl.style.setProperty('--project-cols', size);
+          group.forEach(card => pageEl.appendChild(card.cloneNode(true)));
+          track.appendChild(pageEl);
+        });
+
+        if (totalPages > 1) {
+          const originalPages = Array.from(track.querySelectorAll('.project-page'));
+          originalPages.forEach(p => track.appendChild(p.cloneNode(true)));
+        }
+
+        const totalSlides = totalPages > 1 ? totalPages * 2 : totalPages;
+        track.style.width = (totalSlides * 100) + '%';
+        track.querySelectorAll('.project-page').forEach(p => {
+          p.style.flex = `0 0 ${100 / totalSlides}%`;
+          p.style.width = `${100 / totalSlides}%`;
+        });
+
+        for (let i = 0; i < totalPages; i++){
+          const dot = document.createElement('span');
+          if (i === 0) dot.classList.add('active');
+          dot.addEventListener('click', () => {
+            if (isTransitioning || page === i) return;
+            page = i;
+            render(true);
+          });
+          dotsWrap.appendChild(dot);
+        }
+        if (totalPages <= 1) {
+          if (prevBtn) prevBtn.style.display = 'none';
+          if (nextBtn) nextBtn.style.display = 'none';
+        } else {
+          if (prevBtn) prevBtn.style.display = 'flex';
+          if (nextBtn) nextBtn.style.display = 'flex';
+        }
+        page = 0;
+        render(false);
+        if (totalPages > 1) startAutoplay();
+      }
+      
+      track.addEventListener('transitionend', () => {
+        isTransitioning = false;
+        if (page >= totalPages && totalPages > 1) {
+          page = 0; 
+          render(false);
+        }
+      });
+
+      function render(withTransition){
+        const totalSlides = totalPages > 1 ? totalPages * 2 : totalPages;
+        if (totalSlides <= 0) return;
+        if (withTransition) {
+          track.style.transition = 'transform .6s cubic-bezier(0.25, 1, 0.5, 1)';
+          isTransitioning = true;
+        } else {
+          track.style.transition = 'none';
+          isTransitioning = false;
+        }
+        track.offsetHeight; 
+        track.style.transform = `translateX(-${page * (100 / totalSlides)}%)`;
+
+        if (dotsWrap) {
+          const dots = dotsWrap.querySelectorAll('span');
+          const activeDot = page % totalPages;
+          dots.forEach((dot, index) => {
+            dot.classList.toggle('active', index === activeDot);
+          });
+        }
+      }
+
+      function nextPage(){
+        if (isTransitioning || totalPages <= 1) return;
+        page++;
         render(true);
+      }
+
+      function prevPage(){
+        if (isTransitioning || totalPages <= 1) return;
+        if (page === 0) {
+          page = totalPages; 
+          render(false);
+          track.offsetHeight; 
+        }
+        page--;
+        render(true);
+      }
+
+      function startAutoplay(){
+        stopAutoplay();
+        autoplayTimer = setInterval(nextPage, 3500);
+      }
+      function stopAutoplay(){
+        if (autoplayTimer) clearInterval(autoplayTimer);
+        autoplayTimer = null;
+      }
+
+      if (prevBtn) prevBtn.addEventListener('click', prevPage);
+      if (nextBtn) nextBtn.addEventListener('click', nextPage);
+      if (carouselWrap){
+        carouselWrap.addEventListener('mouseenter', stopAutoplay);
+        carouselWrap.addEventListener('mouseleave', () => { if (totalPages > 1) startAutoplay(); });
+      }
+
+      if (filterTabs.length){
+        filterTabs.forEach(btn => {
+          btn.addEventListener('click', () => {
+            filterTabs.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentFilter = btn.dataset.filter || 'all';
+            buildPages();
+          });
+        });
+      }
+
+      let resizeTimer;
+      window.addEventListener('resize', () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(buildPages, 250);
       });
-      dotsWrap.appendChild(dot);
-    }
-    if (totalPages <= 1) {
-      if (prevBtn) prevBtn.style.display = 'none';
-      if (nextBtn) nextBtn.style.display = 'none';
-    } else {
-      if (prevBtn) prevBtn.style.display = 'flex';
-      if (nextBtn) nextBtn.style.display = 'flex';
-    }
-    page = 0;
-    render(false);
-    if (totalPages > 1) startAutoplay();
-  }
-  
-  // 5. Tangkap akhir transisi untuk trik Reset instan ke awal
-  track.addEventListener('transitionend', () => {
-    isTransitioning = false;
-    if (page >= totalPages && totalPages > 1) {
-      page = 0; // Kembalikan ke halaman 1 asli secara diam-diam
-      render(false);
-    }
-  });
 
-  function render(withTransition){
-    const totalSlides = totalPages > 1 ? totalPages * 2 : totalPages;
-    if (totalSlides <= 0) return;
-
-    if (withTransition) {
-      track.style.transition = 'transform .6s cubic-bezier(0.25, 1, 0.5, 1)';
-      isTransitioning = true;
-    } else {
-      track.style.transition = 'none';
-      isTransitioning = false;
-    }
-
-    // Force reflow agar pemutusan animasi (transition: none) terbaca browser
-    track.offsetHeight; 
-
-    track.style.transform = `translateX(-${page * (100 / totalSlides)}%)`;
-
-    if (dotsWrap) {
-      const dots = dotsWrap.querySelectorAll('span');
-      const activeDot = page % totalPages; // Hitung ulang dot mana yang aktif
-      dots.forEach((dot, index) => {
-        dot.classList.toggle('active', index === activeDot);
+      track.addEventListener('click', (event) => {
+        const toggleBtn = event.target.closest('.dropdown-toggle-btn');
+        if (toggleBtn) {
+          event.stopPropagation();
+          const card = toggleBtn.closest('.project-card');
+          
+          track.querySelectorAll('.project-card').forEach(item => {
+            if (item !== card) item.classList.remove('open');
+          });
+          
+          if (card) card.classList.toggle('open');
+          return;
+        }
       });
-    }
+
+      buildPages();
   }
-
-  function nextPage(){
-    if (isTransitioning || totalPages <= 1) return;
-    page++;
-    render(true);
-  }
-
-  function prevPage(){
-    if (isTransitioning || totalPages <= 1) return;
-    if (page === 0) {
-      page = totalPages; // Lompat ke salinan terakhir sebelum mundur
-      render(false);
-      track.offsetHeight; // Force reflow
-    }
-    page--;
-    render(true);
-  }
-
-  function startAutoplay(){
-    stopAutoplay();
-    autoplayTimer = setInterval(nextPage, 3500);
-  }
-  function stopAutoplay(){
-    if (autoplayTimer) clearInterval(autoplayTimer);
-    autoplayTimer = null;
-  }
-
-  if (prevBtn) prevBtn.addEventListener('click', prevPage);
-  if (nextBtn) nextBtn.addEventListener('click', nextPage);
-  if (carouselWrap){
-    carouselWrap.addEventListener('mouseenter', stopAutoplay);
-    carouselWrap.addEventListener('mouseleave', () => { if (totalPages > 1) startAutoplay(); });
-  }
-
-  // LOGIKA SWIPE (TOUCH)
-  /*let touchStartX = 0;
-  let touchEndX = 0;
-  track.addEventListener('touchstart', (e) => {
-    touchStartX = e.changedTouches[0].screenX;
-    stopAutoplay();
-  }, { passive: true });
-  
-  track.addEventListener('touchmove', (e) => {
-    touchEndX = e.changedTouches[0].screenX;
-  }, { passive: true });
-  
-  track.addEventListener('touchend', () => {
-    const swipeThreshold = 50; 
-    if (touchStartX - touchEndX > swipeThreshold) {
-      nextPage();
-    } else if (touchEndX - touchStartX > swipeThreshold) {
-      prevPage();
-    }
-    if (totalPages > 1) startAutoplay();
-  });
-*/
-  // FILTER TOMBOL
-  if (filterTabs.length){
-    filterTabs.forEach(btn => {
-      btn.addEventListener('click', () => {
-        filterTabs.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        currentFilter = btn.dataset.filter || 'all';
-        buildPages();
-      });
-    });
-  }
-
-  let resizeTimer;
-  window.addEventListener('resize', () => {
-    clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(buildPages, 250);
-  });
-
-  // EVENT DELEGATION UNTUK TOMBOL DROPDOWN
-  track.addEventListener('click', (event) => {
-    const toggleBtn = event.target.closest('.dropdown-toggle-btn');
-    if (toggleBtn) {
-      event.stopPropagation();
-      const card = toggleBtn.closest('.project-card');
-      
-      track.querySelectorAll('.project-card').forEach(item => {
-        if (item !== card) item.classList.remove('open');
-      });
-      
-      if (card) card.classList.toggle('open');
-      return;
-    }
-  });
-
-  buildPages();
 })();
 
 // ===== 3. CLIENT CAROUSEL LOGIC (WITH AUTOPLAY) - PERFECT LOOP =====
