@@ -206,10 +206,10 @@ filter: drop-shadow(1px 1px 0px #00f2fe) drop-shadow(-1px -1px 0px #fe0979);}
   color: var(--c);
   }
 .hero-tags .tag-chip {
-  font-family: 'JetBrains Mono', monospace;font-size: 13px;font-weight: 600;letter-spacing: 1px;
+  font-family: 'JetBrains Mono', monospace;font-size: 18px;font-weight: 600;letter-spacing: 1px;
   display: inline-block;padding: 6px 14px;
-  background: rgba(0, 174, 239, 0.1); border: 1px solid rgba(0, 174, 239, 0.3);border-radius: 6px;
-  color: var(--c);backdrop-filter: blur(3px);filter: drop-shadow(1px 1px 0px #00f2fe)
+  background: none; border: none;border-radius: 8px;
+  color: #00f2fe;backdrop-filter: blur(3px);filter: drop-shadow(-1px 1px 0px var(--blue-deep))
   }
 .btn-primary{
   font-weight:600;font-size:14.5px;letter-spacing:.3px;
