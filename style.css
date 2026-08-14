@@ -209,7 +209,8 @@ filter: drop-shadow(1px 1px 0px #00f2fe) drop-shadow(-1px -1px 0px #fe0979);}
   font-family: 'JetBrains Mono', monospace;font-size: 13px;font-weight: 600;letter-spacing: 1px;
   display: inline-block;padding: 6px 14px;
   background: rgba(0, 174, 239, 0.1); border: 1px solid rgba(0, 174, 239, 0.3);border-radius: 6px;
-  color: var(--c);backdrop-filter: blur(4px);}
+  color: var(--c);backdrop-filter: blur(3px);filter: drop-shadow(1px 1px 0px #00f2fe)
+  }
 .btn-primary{
   font-weight:600;font-size:14.5px;letter-spacing:.3px;
   display: inline-flex;align-items: center;gap: 10px; padding: 16px 15px;margin-bottom: 35px;
@@ -249,10 +250,10 @@ filter: drop-shadow(1px 1px 0px #00f2fe) drop-shadow(-1px -1px 0px #fe0979);}
   font-family: 'Space Grotesk', sans-serif;font-size: 26px;font-weight: 800;font-style: italic;
   width:88px;height:88px;margin:0 auto 22px; display: flex;align-items: center; justify-content: center;
   background: rgba(255, 255, 255, .15);border:2px solid var(--line);border-radius: 50%;
-  color: var(--white);backdrop-filter: blur(10px); box-shadow: var(--c) 0px 0px 20px -6px;transition: transform .3s ease, background .3s ease;
+  color: var(--white);backdrop-filter: blur(10px); 
 }
 .why-item:hover .why-num{
-  background:var(--blue);
+  background:var(--blue-deep);box-shadow: var(--c) 0px 0px 20px -6px; transition: transform .3s ease, background .3s ease;
   color:var(--white);transform: translateY(-6px);
 }
 .why-item h3{
@@ -312,7 +313,7 @@ section{padding:25px 60px;position:relative;}
 .ethic-list li::before {
   font-size: 12px;
   content: "✦";
-  color: var(--blue);
+  color: var(--lime);
 }
 .accordion-item{
   border-bottom: 1.5px solid black;scroll-margin-top: 120px;display: grid;
