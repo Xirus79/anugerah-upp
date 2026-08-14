@@ -31,31 +31,48 @@ if (serviceTabs.length > 0) {
       return url;
   }
 
+  // TAMBAHAN BARU: Fungsi untuk Mencegah XSS (Keamanan)
+  function amankanTeks(str) {
+      if (!str) return '';
+      // Membuat elemen bayangan untuk mengubah tag bahaya menjadi teks biasa
+      const div = document.createElement('div');
+      div.textContent = str; 
+      return div.innerHTML; 
+  }
+
+  // TAMBAHAN BARU: Memunculkan UI Loading
+  const track = document.getElementById('projectTrack');
+  const loadingIndicator = document.createElement('div');
+  loadingIndicator.style.cssText = 'width: 100%; text-align: center; padding: 40px; font-weight: 600; color: var(--navy); font-family: "Space Grotesk", sans-serif;';
+  loadingIndicator.innerText = 'Memuat Portofolio terbaru...';
+  if (track) track.appendChild(loadingIndicator);
+
   // Menarik data dari Google Sheets
   fetch(tsvUrl)
-    .then(response => response.text())
+    .then(response => {
+        if (!response.ok) throw new Error("Gagal mengambil data");
+        return response.text();
+    })
     .then(data => {
-        // Kosongkan data manual bawaan dari HTML
-        source.innerHTML = ''; 
-
         const baris = data.split('\n');
+        
+        // Gudang penampungan sementara
+        let htmlBaru = ''; 
 
         for (let i = 1; i < baris.length; i++) {
-            // Gunakan split('\t') karena kita menggunakan format TSV (Tab) agar aman dari tanda koma
             const kolom = baris[i].split('\t');
 
-            // Pastikan minimal ada 5 kolom terisi
             if (kolom.length >= 5) {
-                const kategori = kolom[0].trim().toLowerCase();
-                const nama = kolom[1].trim();
-                const descSingkat = kolom[2].trim();
-                const descPanjang = kolom[3].trim();
+                // Semua teks dimasukkan ke amankanTeks() untuk mencegah injeksi script nakal
+                const kategori = amankanTeks(kolom[0].trim().toLowerCase());
+                const nama = amankanTeks(kolom[1].trim());
+                const descSingkat = amankanTeks(kolom[2].trim());
+                const descPanjang = amankanTeks(kolom[3].trim());
                 let gambar = kolom[4].trim();
 
                 gambar = ubahLinkDrive(gambar);
 
-                // Template HTML otomatis untuk setiap produk
-                const htmlCard = `
+                htmlBaru += `
                   <article class="project-card" data-category="${kategori}">
                     <div class="card-image-wrapper">
                       <img src="${gambar}" alt="${nama}">
@@ -76,17 +93,23 @@ if (serviceTabs.length > 0) {
                     </div>
                   </article>
                 `;
-                // Suntikkan ke HTML
-                source.innerHTML += htmlCard;
             }
         }
         
-        // SETELAH KARTU SELESAI DIBUAT DARI GOOGLE SHEETS, JALANKAN LOGIKA CAROUSEL ASLI
+        // Hapus elemen loading
+        if (loadingIndicator.parentNode) loadingIndicator.remove();
+        
+        // Ganti pajangan jika ada data baru (Fallback Strategy)
+        if (htmlBaru.trim() !== '') {
+            source.innerHTML = htmlBaru; 
+        }
+        
         initCarousel();
     })
     .catch(error => {
         console.error('Gagal memuat data dari Google Sheets:', error);
-        initCarousel(); // Tetap jalankan carousel jika gagal agar web tidak patah
+        if (loadingIndicator.parentNode) loadingIndicator.remove();
+        initCarousel(); // Tetap jalankan slider dengan "pajangan cadangan" HTML asli
     });
 
   // --- LOGIKA ASLI CAROUSEL KAMU ---
@@ -283,8 +306,11 @@ if (serviceTabs.length > 0) {
   }
 })();
 
-// ===== 3. CLIENT CAROUSEL LOGIC (WITH AUTOPLAY) - PERFECT LOOP =====
+// ===== 3. CLIENT CAROUSEL LOGIC DENGAN GOOGLE SHEETS =====
 (function(){
+  // MASUKKAN LINK TSV KHUSUS UNTUK TAB "CLIENT"
+  const clientTsvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ0hszsBjPA_dKuF1LSAgQY0_A0pTs69I3j7bwRjlttNO1eQOtQ0_OvAe9AroJLwgf3tCwqOadqOUjA/pub?gid=399638841&single=true&output=tsv';
+  
   const track = document.getElementById('clientTrack');
   const dotsWrap = document.getElementById('clientDots');
   const prevBtn = document.getElementById('clientPrev');
@@ -293,178 +319,234 @@ if (serviceTabs.length > 0) {
   
   if (!track) return; 
 
-  // Ambil semua card logo asli dari HTML sebelum dikloning
-  const allCards = Array.from(track.querySelectorAll('.client-logo-card'));
-  if (allCards.length === 0) return;
-
-  let page = 0;
-  let totalPages = 0;
-  let isTransitioning = false; 
-  let autoplayTimer = null;
-
-  // Tentukan jumlah logo per halaman (1 untuk HP, 2 untuk Desktop)
-  function getItemsPerPage() {
-    return window.innerWidth <= 768 ? 1 : 2; 
-  }
-
-  // Bangun ulang struktur halaman (slide) secara dinamis
-  function buildClientPages() {
-    stopAutoplay();
-    const itemsPerPage = getItemsPerPage();
-    
-    // Bersihkan track dan dots lama
-    track.innerHTML = '';
-    if (dotsWrap) dotsWrap.innerHTML = '';
-    
-    // Kelompokkan kartu logo ke dalam halaman-halaman baru
-    const groups = [];
-    for (let i = 0; i < allCards.length; i += itemsPerPage) {
-      groups.push(allCards.slice(i, i + itemsPerPage));
-    }
-    totalPages = groups.length;
-
-    if (totalPages === 0) return;
-
-    // Masukkan halaman asli ke dalam track
-    groups.forEach(group => {
-      const pageEl = document.createElement('div');
-      pageEl.className = 'client-page';
-      group.forEach(card => pageEl.appendChild(card.cloneNode(true)));
-      track.appendChild(pageEl);
-    });
-
-    // Kloning halaman untuk efek Perfect Loop (Infinite Scroll)
-    const originalPages = Array.from(track.querySelectorAll('.client-page'));
-    originalPages.forEach(p => track.appendChild(p.cloneNode(true)));
-
-    const totalSlides = totalPages * 2;
-    track.style.width = (totalSlides * 100) + '%';
-    
-    track.querySelectorAll('.client-page').forEach(p => {
-      p.style.flex = `0 0 ${100 / totalSlides}%`;
-      p.style.width = `${100 / totalSlides}%`;
-    });
-
-    // Bangun indicator dots jika elemennya ada di HTML
-    if (dotsWrap) {
-      for (let i = 0; i < totalPages; i++) {
-        const dot = document.createElement('span');
-        if (i === 0) dot.classList.add('active');
-        dot.addEventListener('click', () => {
-          if (isTransitioning || page === i) return;
-          page = i;
-          render(true);
-        });
-        dotsWrap.appendChild(dot);
+  // Fungsi bantuan untuk Google Drive Image API
+  function ubahLinkDrive(url) {
+      if (url.includes('drive.google.com')) {
+          const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+          if (match && match[1]) {
+              return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w800`;
+          }
       }
-    }
-
-    page = 0;
-    render(false);
-    if (totalPages > 1) startAutoplay();
+      return url;
   }
 
-  function render(withTransition = true) {
-    const totalSlides = totalPages * 2;
-    if (totalSlides <= 0) return;
-
-    if (withTransition) {
-      track.style.transition = 'transform 0.6s cubic-bezier(0.25, 1, 0.5, 1)';
-      isTransitioning = true;
-    } else {
-      track.style.transition = 'none';
-      isTransitioning = false;
-    }
-    
-    track.offsetHeight;
-    track.style.transform = `translateX(-${page * (100 / totalSlides)}%)`;
-    
-    if (dotsWrap) {
-      const dots = dotsWrap.querySelectorAll('span');
-      const activeDot = page % totalPages;
-      dots.forEach((d, i) => d.classList.toggle('active', i === activeDot));
-    }
+  // Fungsi bantuan untuk mencegah XSS
+  function amankanTeks(str) {
+      if (!str) return '';
+      const div = document.createElement('div');
+      div.textContent = str; 
+      return div.innerHTML; 
   }
 
-  function nextPage() {
-    if (isTransitioning || totalPages <= 1) return;
-    page++;
-    render(true);
+  // 1. Simpan HTML asli sebagai "pajangan cadangan" (Fallback)
+  const fallbackHTML = track.innerHTML;
+
+  // 2. Tarik data dari Google Sheets (Tab Client)
+  fetch(clientTsvUrl)
+    .then(response => {
+        if (!response.ok) throw new Error("Gagal menarik data klien");
+        return response.text();
+    })
+    .then(data => {
+        const baris = data.split('\n');
+        let htmlBaru = '';
+
+        // Looping data klien (mulai dari baris ke-2 karena baris 1 adalah header)
+        for (let i = 1; i < baris.length; i++) {
+            const kolom = baris[i].split('\t');
+            // Pastikan ada minimal 2 kolom (Nama Mitra & Link Logo)
+            if (kolom.length >= 2) {
+                const nama = amankanTeks(kolom[0].trim());
+                let gambar = kolom[1].trim();
+                gambar = ubahLinkDrive(gambar);
+
+                if (gambar !== '') {
+                  // Cetak HTML untuk masing-masing logo
+                  htmlBaru += `<div class="client-logo-card"><img src="${gambar}" alt="${nama}"></div>`;
+                }
+            }
+        }
+
+        // 3. Jika ada data baru yang valid, timpa HTML di dalam track
+        if (htmlBaru.trim() !== '') {
+            track.innerHTML = htmlBaru;
+        }
+        
+        // 4. Inisialisasi logika Slider/Carousel
+        initClientCarousel();
+    })
+    .catch(error => {
+        console.error('Gagal memuat data Client dari Google Sheets:', error);
+        // Jika gagal, kembalikan ke "pajangan cadangan" dari HTML asli
+        track.innerHTML = fallbackHTML; 
+        initClientCarousel();
+    });
+
+
+  // --- LOGIKA ASLI CAROUSEL CLIENT ---
+  function initClientCarousel() {
+      // Ambil ulang semua logo card setelah di-inject (atau dari fallback)
+      const allCards = Array.from(track.querySelectorAll('.client-logo-card'));
+      if (allCards.length === 0) return;
+
+      let page = 0;
+      let totalPages = 0;
+      let isTransitioning = false; 
+      let autoplayTimer = null;
+
+      function getItemsPerPage() {
+        return window.innerWidth <= 768 ? 1 : 2; 
+      }
+
+      function buildClientPages() {
+        stopAutoplay();
+        const itemsPerPage = getItemsPerPage();
+        
+        track.innerHTML = '';
+        if (dotsWrap) dotsWrap.innerHTML = '';
+        
+        const groups = [];
+        for (let i = 0; i < allCards.length; i += itemsPerPage) {
+          groups.push(allCards.slice(i, i + itemsPerPage));
+        }
+        totalPages = groups.length;
+
+        if (totalPages === 0) return;
+
+        groups.forEach(group => {
+          const pageEl = document.createElement('div');
+          pageEl.className = 'client-page';
+          group.forEach(card => pageEl.appendChild(card.cloneNode(true)));
+          track.appendChild(pageEl);
+        });
+
+        const originalPages = Array.from(track.querySelectorAll('.client-page'));
+        originalPages.forEach(p => track.appendChild(p.cloneNode(true)));
+
+        const totalSlides = totalPages * 2;
+        track.style.width = (totalSlides * 100) + '%';
+        
+        track.querySelectorAll('.client-page').forEach(p => {
+          p.style.flex = `0 0 ${100 / totalSlides}%`;
+          p.style.width = `${100 / totalSlides}%`;
+        });
+
+        if (dotsWrap) {
+          for (let i = 0; i < totalPages; i++) {
+            const dot = document.createElement('span');
+            if (i === 0) dot.classList.add('active');
+            dot.addEventListener('click', () => {
+              if (isTransitioning || page === i) return;
+              page = i;
+              render(true);
+            });
+            dotsWrap.appendChild(dot);
+          }
+        }
+
+        page = 0;
+        render(false);
+        if (totalPages > 1) startAutoplay();
+      }
+
+      function render(withTransition = true) {
+        const totalSlides = totalPages * 2;
+        if (totalSlides <= 0) return;
+
+        if (withTransition) {
+          track.style.transition = 'transform 0.6s cubic-bezier(0.25, 1, 0.5, 1)';
+          isTransitioning = true;
+        } else {
+          track.style.transition = 'none';
+          isTransitioning = false;
+        }
+        
+        track.offsetHeight;
+        track.style.transform = `translateX(-${page * (100 / totalSlides)}%)`;
+        
+        if (dotsWrap) {
+          const dots = dotsWrap.querySelectorAll('span');
+          const activeDot = page % totalPages;
+          dots.forEach((d, i) => d.classList.toggle('active', i === activeDot));
+        }
+      }
+
+      function nextPage() {
+        if (isTransitioning || totalPages <= 1) return;
+        page++;
+        render(true);
+      }
+
+      function prevPage() {
+        if (isTransitioning || totalPages <= 1) return;
+        if (page === 0) {
+          page = totalPages;
+          render(false);
+          track.getBoundingClientRect();
+        }
+        page--;
+        render(true);
+      }
+
+      track.addEventListener('transitionend', () => {
+        isTransitioning = false;
+        if (page >= totalPages) {
+          page = 0;
+          render(false);
+        }
+      });
+
+      function startAutoplay() {
+        stopAutoplay();
+        autoplayTimer = setInterval(nextPage, 1500); 
+      }
+
+      function stopAutoplay() {
+        if (autoplayTimer) clearInterval(autoplayTimer);
+        autoplayTimer = null;
+      }
+
+      if (prevBtn) prevBtn.addEventListener('click', (e) => { e.preventDefault(); prevPage(); });
+      if (nextBtn) nextBtn.addEventListener('click', (e) => { e.preventDefault(); nextPage(); });
+
+      if (container) {
+        container.addEventListener('mouseenter', stopAutoplay);
+        container.addEventListener('mouseleave', () => { if (totalPages > 1) startAutoplay(); });
+      }
+
+      let resizeTimer;
+      window.addEventListener('resize', () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(buildClientPages, 250);
+      });
+
+      let clientTouchStartX = 0;
+      let clientTouchEndX = 0;
+      
+      track.addEventListener('touchstart', e => {
+        clientTouchStartX = e.changedTouches[0].screenX;
+        stopAutoplay(); 
+      }, {passive: true});
+      
+      track.addEventListener('touchend', e => {
+        clientTouchEndX = e.changedTouches[0].screenX;
+        handleClientSwipe();
+        if (totalPages > 1) startAutoplay(); 
+      }, {passive: true});
+      
+      function handleClientSwipe() {
+        const swipeDistance = clientTouchEndX - clientTouchStartX;
+        const minDistance = 40; 
+        
+        if (swipeDistance < -minDistance) {
+          nextPage(); 
+        } else if (swipeDistance > minDistance) {
+          prevPage(); 
+        }
+      }
+
+      buildClientPages();
   }
-
-  function prevPage() {
-    if (isTransitioning || totalPages <= 1) return;
-    if (page === 0) {
-      page = totalPages;
-      render(false);
-      track.getBoundingClientRect(); // Force reflow browser
-    }
-    page--;
-    render(true);
-  }
-
-  track.addEventListener('transitionend', () => {
-    isTransitioning = false;
-    if (page >= totalPages) {
-      page = 0;
-      render(false);
-    }
-  });
-
-  function startAutoplay() {
-    stopAutoplay();
-    autoplayTimer = setInterval(nextPage, 1500); 
-  }
-
-  function stopAutoplay() {
-    if (autoplayTimer) clearInterval(autoplayTimer);
-    autoplayTimer = null;
-  }
-
-  if (prevBtn) prevBtn.addEventListener('click', (e) => { e.preventDefault(); prevPage(); });
-  if (nextBtn) nextBtn.addEventListener('click', (e) => { e.preventDefault(); nextPage(); });
-
-  if (container) {
-    container.addEventListener('mouseenter', stopAutoplay);
-    container.addEventListener('mouseleave', () => { if (totalPages > 1) startAutoplay(); });
-  }
-
-  // Jalankan ulang kalkulasi jika layar diputar/di-resize
-  let resizeTimer;
-  window.addEventListener('resize', () => {
-    clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(buildClientPages, 250);
-  });
-
-  /* === LOGIKA SENSOR SWIPE / SENTUHAN (MOBILE & DESKTOP) === */
-  let clientTouchStartX = 0;
-  let clientTouchEndX = 0;
-  
-  track.addEventListener('touchstart', e => {
-    clientTouchStartX = e.changedTouches[0].screenX;
-    stopAutoplay(); // 1. Hentikan autoplay saat jari menempel di layar
-  }, {passive: true});
-  
-  track.addEventListener('touchend', e => {
-    clientTouchEndX = e.changedTouches[0].screenX;
-    handleClientSwipe();
-    
-    if (totalPages > 1) startAutoplay(); // 2. Lanjutkan autoplay saat jari dilepas
-  }, {passive: true});
-  
-  function handleClientSwipe() {
-    const swipeDistance = clientTouchEndX - clientTouchStartX;
-    const minDistance = 40; // Batas sensitivitas geseran jari
-    
-    if (swipeDistance < -minDistance) {
-      nextPage(); // Geser ke logo selanjutnya
-    } else if (swipeDistance > minDistance) {
-      prevPage(); // Geser ke logo sebelumnya
-    }
-  }
-
-  // Init pertama kali
-  buildClientPages();
 })();
 
 // ===== 4. SMART HEADER LOGIC =====
