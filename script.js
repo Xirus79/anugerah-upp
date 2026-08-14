@@ -310,7 +310,7 @@ if (serviceTabs.length > 0) {
 (function(){
   // MASUKKAN LINK TSV KHUSUS UNTUK TAB "CLIENT"
   const clientTsvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ0hszsBjPA_dKuF1LSAgQY0_A0pTs69I3j7bwRjlttNO1eQOtQ0_OvAe9AroJLwgf3tCwqOadqOUjA/pub?gid=399638841&single=true&output=tsv';
-  
+   
   const track = document.getElementById('clientTrack');
   const dotsWrap = document.getElementById('clientDots');
   const prevBtn = document.getElementById('clientPrev');
@@ -664,29 +664,36 @@ document.addEventListener('DOMContentLoaded', function() {
         submitBtn.disabled = true; // Kunci tombol agar user tidak klik berkali-kali
       }
 
-      // Eksekusi pengiriman formulir via EmailJS
-      // Sesuai template, ganti 'YOUR_SERVICE_ID' dan 'YOUR_TEMPLATE_ID' dengan ID aslimu
-      emailjs.sendForm('service_mjulr7l', 'template_8qhk1uf', this)
-        .then(function() {
-          // Panggil Snackbar Sukses
-          showToast('success', "Pesan berhasil dikirim! Terima kasih, kami akan segera menghubungi Anda.");
+      // --- TAMBAHAN BARU: Kirim data ke Google Sheets ---
+      // PASTE URL WEB APP APPS SCRIPT KAMU DI SINI:
+      const googleScriptUrl = 'https://script.google.com/macros/s/AKfycbwnW4cKFk8DH-xBLYypCsIRuZARwCrrUuZOyhtuDUFIUPPVxHsB37uI-DNF6RuR3XuZ/exec';
+      
+      // Ambil seluruh data dari form
+      const formData = new FormData(contactForm);
+
+      // Kita jalankan 2 fungsi sekaligus (Paralel): Kirim ke Sheets & Kirim ke EmailJS
+      Promise.all([
+        fetch(googleScriptUrl, { method: 'POST', body: formData }),
+        emailjs.sendForm('service_mjulr7l', 'template_8qhk1uf', this)
+      ])
+      .then(() => {
+          // Jika keduanya sukses
+          showToast('success', "Pesan berhasil dikirim dan tersimpan! Terima kasih.");
           contactForm.reset();
-          
-          // Kembalikan tombol ke kondisi semula
           if (submitBtn) {
             submitBtn.innerHTML = originalBtnText;
             submitBtn.disabled = false;
           }
-        }, function(error) {
-          // Panggil Snackbar Gagal
+      })
+      .catch((error) => {
+          // Jika ada yang gagal
+          console.error("Error:", error);
           showToast('error', "Gagal mengirim pesan. Silakan coba beberapa saat lagi.");
-          
-          // Kembalikan tombol ke kondisi semula
           if (submitBtn) {
             submitBtn.innerHTML = originalBtnText;
             submitBtn.disabled = false;
           }
-        });
+      });
     });
   }
 });
